@@ -7,7 +7,7 @@
   "engines": { "node": ">=22.18" },
   "bin": { "loops": "src/cli.ts" },
   "scripts": {
-    "test": "node --test 'test/**/*.test.ts'",
+    "test": "node --test 'test/**/*.spec.ts'",
     "typecheck": "tsc"
   },
   "dependencies": {
