@@ -97,7 +97,7 @@ export function remove(loop: Loop, position: number): Loop {
   }
 
   const kept = repeat.until.filter((id) => inside.some((step) => step.id === id));
-  const until = kept.length > 0 ? kept : [inside[inside.length - 1].id];
+  const until = kept.length > 0 ? kept : [inside.at(-1)!.id];
   steps[where.node] = { repeat: { ...repeat, until, steps: inside } };
   return { ...loop, steps };
 }

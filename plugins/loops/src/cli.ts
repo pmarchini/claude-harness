@@ -31,6 +31,11 @@ switch (command) {
     const [name, task] = args;
     const found = findLoop(name);
     if (!found) break;
+    if (!task) {
+      console.error(`Say what to build: loops run ${name} "what to build"`);
+      process.exitCode = 1;
+      break;
+    }
 
     const startedAt = new Date();
     const record = runLoop(found.loop, {
