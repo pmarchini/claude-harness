@@ -1,0 +1,20 @@
+{
+  "name": "claude-loops",
+  "version": "0.1.0",
+  "description": "Claude Code plugin: define loops of steps and gates, and run them against an implementation",
+  "type": "module",
+  "private": true,
+  "engines": { "node": ">=22.18" },
+  "bin": { "loops": "src/cli.ts" },
+  "scripts": {
+    "test": "node --test 'test/**/*.test.ts'",
+    "typecheck": "tsc"
+  },
+  "dependencies": {
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "typescript": "^5.9.3"
+  }
+}
