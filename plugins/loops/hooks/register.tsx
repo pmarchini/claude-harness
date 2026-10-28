@@ -18,7 +18,7 @@ import {
 import type { TemplateId } from '../src/editor.ts'
 import { renderLoop } from '../src/graph.ts'
 import { problemsIn } from '../src/loop-rules.ts'
-import type { EditorState } from '../types'
+import type { EditorState, EditorStep } from '../types'
 
 const EDITOR_PANE = 'loops-editor'
 
@@ -129,13 +129,13 @@ export const register: Register = on => {
         )}
         {repeat && !state.picker && (
           <Box flexDirection="column">
-            <Text bold>Repeat: goes round until these pass, or stops after the round limit</Text>
+            <Text bold>This repeat goes round until what you pick passes, or stops anyway after the round limit.</Text>
             <Select
               key="until"
               label="Until"
               value={repeat.until.length === repeat.steps.length ? 'all' : repeat.until.join(',')}
               options={[
-                ...repeat.steps.map(step => ({ value: step.id, label: `${step.id} passes` })),
+                ...repeat.steps.map(step => ({ value: step.id, label: whenPasses(step) })),
                 { value: 'all', label: 'every step in the repeat passes' },
               ]}
               onSelect={choice => change(s => setUntil(s, choice))}
@@ -143,6 +143,7 @@ export const register: Register = on => {
             <Input
               key="rounds"
               label="Stop anyway after this many rounds"
+              submitLabel="set"
               value={String(repeat.max_rounds)}
               onSubmit={text => change(s => setRounds(s, text))}
             />
@@ -220,7 +221,7 @@ function start(state: EditorState, choice: string): EditorState {
     return { ...state, stage: 'edit', loop: blankLoop(name), cursor: -1, picker: 'block', message: undefined }
   }
   const loop = fromTemplate(choice as TemplateId, name, state.commands)
-  return { ...state, stage: 'edit', loop, cursor: -1, message: undefined }
+  return { ...state, stage: 'edit', loop, cursor: 0, message: undefined }
 }
 
 function addBlock(state: EditorState, block: string): EditorState {
@@ -291,7 +292,18 @@ function wrapRange(state: EditorState, range: string): EditorState {
   const wrapped = wrapInRepeat(state.loop, first, last)
   if (typeof wrapped === 'string') return { ...state, picker: undefined, message: wrapped }
 
-  return { ...state, loop: wrapped, picker: undefined, message: 'Wrapped in a repeat.' }
+  const repeat = repeatAt(wrapped, first)!
+  const ids = drawnStepIds(state.loop)
+  const steps = first === last ? ids[first] : `${ids[first]} → ${ids[last]}`
+  const message =
+    `Wrapped ${steps} in a repeat: it goes round until ${repeat.until.join(' and ')} passes, ` +
+    `${repeat.max_rounds} rounds at most. Change either below.`
+  return { ...state, loop: wrapped, picker: undefined, message }
+}
+
+/** What it takes for `step` to pass, as an until option says it. */
+function whenPasses(step: EditorStep): string {
+  return step.run === undefined ? `${step.id} finishes without an error` : `${step.id} passes: ${step.run} exits 0`
 }
 
 /** Every step's id, in drawing order. */

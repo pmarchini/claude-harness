@@ -113,7 +113,7 @@ test('with the cursor inside a repeat, its until and round limit can be changed 
   const { ui, written } = await openEditor($, on, { files: ['package.json'], surface: 'desktop' })
   await ui.input({ key: 'name', text: 'green-and-clean' })
   await ui.select({ key: 'start', value: 'repeat-until-done' })
-  await ui.press({ key: 'next' }) // plan
+  // The cursor starts on plan.
   await ui.press({ key: 'next' }) // implement
   await ui.press({ key: 'next' }) // tests
   await ui.press({ key: 'add' })
@@ -241,5 +241,27 @@ test('only the actions that can do something are offered', async ($, on) => {
   await ui.select({ key: 'block', value: 'tests' })
 
   expect(await buttons(ui)).toEqual(['prev', 'next', 'add', 'remove', 'repeat', 'save'])
+  await ui.unmount()
+})
+
+test('a new repeat says in words when it stops, and its choices say what passing means', async ($, on) => {
+  const { ui } = await openEditor($, on, { files: ['pom.xml'] })
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'plan-build-test' })
+  // The cursor starts on plan.
+  await ui.press({ key: 'next' }) // implement
+  await ui.press({ key: 'next' }) // tests
+
+  await ui.press({ key: 'repeat' })
+  await ui.select({ key: 'range', value: '1-2' })
+
+  expect(await ui.find({ type: 'Text', text: 'Wrapped implement → tests in a repeat: it goes round until tests passes, 10 rounds at most. Change either below.' })).toBeDefined()
+  const until = await ui.find({ type: 'Select', key: 'until' })
+  expect((until?.props.options as Array<{ label: string }>).map(option => option.label)).toEqual([
+    'implement finishes without an error',
+    'tests passes: mvn -q test exits 0',
+    'every step in the repeat passes',
+  ])
+  expect((await ui.find({ type: 'Input', key: 'rounds' }))?.props.label).toBe('Stop anyway after this many rounds')
   await ui.unmount()
 })
