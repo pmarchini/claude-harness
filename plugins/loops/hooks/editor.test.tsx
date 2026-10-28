@@ -265,3 +265,22 @@ test('a new repeat says in words when it stops, and its choices say what passing
   expect((await ui.find({ type: 'Input', key: 'rounds' }))?.props.label).toBe('Stop anyway after this many rounds')
   await ui.unmount()
 })
+
+test('the step under the cursor says what it does, and a command step can run another command', async ($, on) => {
+  const { ui, written } = await openEditor($, on, { files: ['pom.xml'] })
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'plan-build-test' })
+
+  expect(await ui.find({ type: 'Text', text: 'plan asks the planner subagent, and passes when it finishes without an error.' })).toBeDefined()
+  expect(await ui.find({ type: 'Input', key: 'command' })).toBeUndefined()
+
+  await ui.press({ key: 'next' }) // implement
+  await ui.press({ key: 'next' }) // tests
+
+  expect(await ui.find({ type: 'Text', text: 'tests runs a command, and passes when it exits 0.' })).toBeDefined()
+  await ui.input({ key: 'command', text: './mvnw verify' })
+  await ui.press({ key: 'save' })
+
+  expect(written[0]?.text).toContain('run: "./mvnw verify"')
+  await ui.unmount()
+})

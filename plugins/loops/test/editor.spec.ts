@@ -7,6 +7,7 @@ import {
   addAfter,
   blankLoop,
   BLOCKS,
+  changeCommand,
   changeRepeat,
   detectCommands,
   fromTemplate,
@@ -161,4 +162,15 @@ test('a repeat never takes in a step already inside another one', () => {
 
   assert.deepEqual(repeatChoices(loop, 3), [{ first: 3, last: 3 }]);
   assert.deepEqual(repeatChoices(loop, 1), []);
+});
+
+test('a command step can run another command, inside a repeat too, and the rest stays as it was', () => {
+  const loop = wrap(loopOf(BLOCKS.implement, BLOCKS.tests('mvn -q test')), 0, 1);
+
+  const edited = changeCommand(loop, 1, './mvnw verify');
+
+  assert.deepEqual(parse(toYaml(edited)).steps[0].repeat.steps, [
+    { id: 'implement', agent: 'main' },
+    { id: 'tests', run: './mvnw verify' },
+  ]);
 });

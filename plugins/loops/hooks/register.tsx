@@ -5,6 +5,7 @@ import {
   addAfter,
   BLOCKS,
   blankLoop,
+  changeCommand,
   changeRepeat,
   detectCommands,
   fromTemplate,
@@ -102,6 +103,7 @@ export const register: Register = on => {
     }
 
     const repeat = repeatAt(state.loop, state.cursor)
+    const step = drawnSteps(state.loop)[state.cursor]
     const blocker = whyNotSavable(state.loop)
     const steps = countSteps(state)
     const isOnStep = state.cursor >= 0
@@ -126,6 +128,20 @@ export const register: Register = on => {
             options={[...rangeOptions(state), BACK]}
             onSelect={range => change(s => (range === BACK.value ? closePicker(s) : wrapRange(s, range)))}
           />
+        )}
+        {step && !state.picker && (
+          <Box flexDirection="column">
+            <Text>{describeStep(step)}</Text>
+            {step.run !== undefined && (
+              <Input
+                key="command"
+                label="Command"
+                submitLabel="set"
+                value={step.run}
+                onSubmit={command => change(s => setCommand(s, command))}
+              />
+            )}
+          </Box>
         )}
         {repeat && !state.picker && (
           <Box flexDirection="column">
@@ -301,14 +317,33 @@ function wrapRange(state: EditorState, range: string): EditorState {
   return { ...state, loop: wrapped, picker: undefined, message }
 }
 
+/** What `step` does and when it passes, as a sentence. */
+function describeStep(step: EditorStep): string {
+  if (step.run !== undefined) return `${step.id} runs a command, and passes when it exits 0.`
+  const who = step.agent === 'main' ? 'Claude in a fresh session' : `the ${step.agent} subagent`
+  return `${step.id} asks ${who}, and passes when it finishes without an error.`
+}
+
+function setCommand(state: EditorState, text: string): EditorState {
+  const command = text.trim()
+  if (command === '') return { ...state, message: "A command can't be empty." }
+
+  const loop = changeCommand(state.loop, state.cursor, command)
+  return { ...state, loop, message: `${drawnSteps(loop)[state.cursor]?.id} now runs ${command}.` }
+}
+
 /** What it takes for `step` to pass, as an until option says it. */
 function whenPasses(step: EditorStep): string {
   return step.run === undefined ? `${step.id} finishes without an error` : `${step.id} passes: ${step.run} exits 0`
 }
 
-/** Every step's id, in drawing order. */
+/** Every step, in drawing order: the cursor's positions. */
+function drawnSteps(loop: EditorState['loop']): EditorStep[] {
+  return loop.steps.flatMap(node => ('repeat' in node ? node.repeat.steps : [node]))
+}
+
 function drawnStepIds(loop: EditorState['loop']): string[] {
-  return loop.steps.flatMap(node => ('repeat' in node ? node.repeat.steps : [node])).map(step => step.id)
+  return drawnSteps(loop).map(step => step.id)
 }
 
 /** What stops the loop from being saved, as the end of a sentence; undefined when nothing does. */

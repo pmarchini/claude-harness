@@ -170,6 +170,22 @@ export function changeRepeat(
   return { ...loop, steps };
 }
 
+/** Makes the command step drawn at `position` run `command` instead. */
+export function changeCommand(loop: Loop, position: number, command: string): Loop {
+  const where = locate(loop, position);
+  if (!where) return loop;
+
+  const steps = [...loop.steps];
+  if (where.inner === undefined) {
+    steps[where.node] = { ...(steps[where.node] as Step), run: command };
+  } else {
+    const { repeat } = steps[where.node] as { repeat: RepeatGroup };
+    const inside = repeat.steps.map((step, i) => (i === where.inner ? { ...step, run: command } : step));
+    steps[where.node] = { repeat: { ...repeat, steps: inside } };
+  }
+  return { ...loop, steps };
+}
+
 /** The repeat the step drawn at `position` belongs to, if it is inside one. */
 export function repeatAt(loop: Loop, position: number): RepeatGroup | undefined {
   const where = locate(loop, position);
