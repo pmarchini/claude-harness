@@ -32,9 +32,10 @@ export function detectCommands(rootFiles: string[]): Commands {
   return tool?.commands ?? FALLBACK_COMMANDS;
 }
 
+/** The templates a loop can start from: a short name, and what the loop does. */
 export const TEMPLATES = {
-  'plan-build-test': 'Plan → build → test, each step once',
-  'repeat-until-done': 'Repeat until done: plan, then implement and test until the tests pass, then report',
+  'plan-build-test': { label: 'Plan → build → test', detail: 'plan, implement, test and report, each once' },
+  'repeat-until-done': { label: 'Repeat until done', detail: 'implement and test go round until the tests pass' },
 } as const;
 export type TemplateId = keyof typeof TEMPLATES;
 
