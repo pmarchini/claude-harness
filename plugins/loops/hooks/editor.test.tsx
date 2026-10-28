@@ -79,8 +79,7 @@ test('a blank loop gets its first step from the palette', async ($, on) => {
     const ui = await mountEditor($, surface)
 
     await ui.input({ key: 'name', text: 'build-until-green' })
-    await ui.select({ key: 'start', value: 'blank' })
-    await ui.press({ key: 'add' })
+    await ui.select({ key: 'start', value: 'blank' }) // opens the palette
     await ui.select({ key: 'block', value: 'plan' })
 
     expect(await ui.find({ type: 'Text', text: /plan/ })).toBeDefined()
@@ -91,8 +90,9 @@ test('a blank loop gets its first step from the palette', async ($, on) => {
 test('implement and tests wrapped in a repeat save as a loop that goes round until the tests pass', async ($, on) => {
   const { ui, written } = await openEditor($, on, { files: ['pom.xml'] })
   await ui.input({ key: 'name', text: 'build-until-green' })
-  await ui.select({ key: 'start', value: 'blank' })
-  for (const block of ['plan', 'implement', 'tests', 'report']) {
+  await ui.select({ key: 'start', value: 'blank' }) // opens the palette
+  await ui.select({ key: 'block', value: 'plan' })
+  for (const block of ['implement', 'tests', 'report']) {
     await ui.press({ key: 'add' })
     await ui.select({ key: 'block', value: block })
   }
@@ -135,8 +135,7 @@ test('with the cursor inside a repeat, its until and round limit can be changed 
 test('x removes the step under the cursor', async ($, on) => {
   const { ui, written } = await openEditor($, on)
   await ui.input({ key: 'name', text: 'any-loop' })
-  await ui.select({ key: 'start', value: 'blank' })
-  await ui.press({ key: 'add' })
+  await ui.select({ key: 'start', value: 'blank' }) // opens the palette
   await ui.select({ key: 'block', value: 'tests' })
   await ui.press({ key: 'add' })
   await ui.select({ key: 'block', value: 'report' })
@@ -207,7 +206,6 @@ test('the header names the loop, counts its steps and says whether it can be sav
 
   expect(await header(ui)).toBe('build-until-green · no steps yet · add a step to save it')
 
-  await ui.press({ key: 'add' })
   await ui.select({ key: 'block', value: 'implement' })
 
   expect(await header(ui)).toBe('build-until-green · 1 step · ✓ ready to save')
@@ -324,5 +322,17 @@ test('once saved, the pane says how to run the loop and offers to keep editing, 
   await ui.press({ key: 'save' })
   await ui.press({ key: 'close' })
   expect(closed).toEqual(['loops-editor'])
+  await ui.unmount()
+})
+
+test('while a list is open under the graph, it is the only thing to act on', async ($, on) => {
+  const { ui } = await openEditor($, on)
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'blank' })
+  await ui.select({ key: 'block', value: 'implement' })
+  await ui.press({ key: 'add' })
+
+  expect(await buttons(ui)).toEqual([])
+  expect(await ui.find({ type: 'Text', text: /^Added / })).toBeUndefined()
   await ui.unmount()
 })

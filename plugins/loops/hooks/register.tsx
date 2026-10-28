@@ -188,36 +188,38 @@ export const register: Register = on => {
             />
           </Box>
         )}
-        <Box flexDirection="row" gap={2}>
-          {steps > 1 && (
-            <Button key="prev" hotkey="h" onPress={() => change(s => moveCursor(s, -1))}>
-              ← prev
+        {!state.picker && (
+          <Box flexDirection="row" gap={2}>
+            {steps > 1 && (
+              <Button key="prev" hotkey="h" onPress={() => change(s => moveCursor(s, -1))}>
+                ← prev
+              </Button>
+            )}
+            {steps > 1 && (
+              <Button key="next" hotkey="l" onPress={() => change(s => moveCursor(s, +1))}>
+                next →
+              </Button>
+            )}
+            <Button key="add" hotkey="a" onPress={() => change(s => openPicker(s, 'block'))}>
+              {steps === 0 ? 'add a step' : 'add after'}
             </Button>
-          )}
-          {steps > 1 && (
-            <Button key="next" hotkey="l" onPress={() => change(s => moveCursor(s, +1))}>
-              next →
-            </Button>
-          )}
-          <Button key="add" hotkey="a" onPress={() => change(s => ({ ...s, picker: 'block' }))}>
-            {steps === 0 ? 'add a step' : 'add after'}
-          </Button>
-          {isOnStep && (
-            <Button key="remove" hotkey="x" onPress={() => change(removeStep)}>
-              remove
-            </Button>
-          )}
-          {isOnStep && !repeat && (
-            <Button key="repeat" hotkey="r" onPress={() => change(s => ({ ...s, picker: 'range' }))}>
-              repeat…
-            </Button>
-          )}
-          {steps > 0 && (
-            <Button key="save" hotkey="s" variant="primary" onPress={() => save($)}>
-              save
-            </Button>
-          )}
-        </Box>
+            {isOnStep && (
+              <Button key="remove" hotkey="x" onPress={() => change(removeStep)}>
+                remove
+              </Button>
+            )}
+            {isOnStep && !repeat && (
+              <Button key="repeat" hotkey="r" onPress={() => change(s => openPicker(s, 'range'))}>
+                repeat…
+              </Button>
+            )}
+            {steps > 0 && (
+              <Button key="save" hotkey="s" variant="primary" onPress={() => save($)}>
+                save
+              </Button>
+            )}
+          </Box>
+        )}
         {state.message && <Text dimColor>{state.message}</Text>}
       </Box>
     )
@@ -317,6 +319,11 @@ function moveCursor(state: EditorState, delta: number): EditorState {
 
 function countSteps(state: EditorState): number {
   return drawnStepIds(state.loop).length
+}
+
+/** Opens a list under the graph; the last message was about an earlier edit, so it goes. */
+function openPicker(state: EditorState, picker: NonNullable<EditorState['picker']>): EditorState {
+  return { ...state, picker, message: undefined }
 }
 
 function closePicker(state: EditorState): EditorState {
