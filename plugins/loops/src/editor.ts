@@ -32,9 +32,10 @@ export function detectCommands(rootFiles: string[]): Commands {
   return tool?.commands ?? FALLBACK_COMMANDS;
 }
 
+/** The templates a loop can start from: a short name, and what the loop does. */
 export const TEMPLATES = {
-  'plan-build-test': 'Plan → build → test',
-  'repeat-until-done': 'Repeat until done',
+  'plan-build-test': { label: 'Plan → build → test', detail: 'plan, implement, test and report, each once' },
+  'repeat-until-done': { label: 'Repeat until done', detail: 'implement and test go round until the tests pass' },
 } as const;
 export type TemplateId = keyof typeof TEMPLATES;
 
@@ -127,6 +128,37 @@ export function wrapInRepeat(loop: Loop, first: number, last: number): Loop | st
   return { ...loop, steps };
 }
 
+/** A run of steps, by their positions in drawing order, first and last included. */
+export type Range = { first: number; last: number };
+
+/**
+ * The runs of steps around `position` that a repeat could hold, the likeliest
+ * first: the step before it with it (do, then check), then the shorter runs.
+ * Steps already inside a repeat are never part of one, as repeats do not nest.
+ */
+export function repeatChoices(loop: Loop, position: number): Range[] {
+  const isOutsideRepeats = (p: number) => {
+    const where = p < 0 ? undefined : locate(loop, p);
+    return where !== undefined && where.inner === undefined;
+  };
+  if (!isOutsideRepeats(position)) return [];
+
+  let lowest = position;
+  while (isOutsideRepeats(lowest - 1)) lowest -= 1;
+  let highest = position;
+  while (isOutsideRepeats(highest + 1)) highest += 1;
+
+  const choices: Range[] = [];
+  for (let first = lowest; first <= position; first++) {
+    for (let last = position; last <= highest; last++) choices.push({ first, last });
+  }
+  const isDoThenCheck = ({ first, last }: Range) => first === position - 1 && last === position;
+  const length = ({ first, last }: Range) => last - first;
+  return choices.sort(
+    (a, b) => Number(isDoThenCheck(b)) - Number(isDoThenCheck(a)) || length(a) - length(b) || a.first - b.first,
+  );
+}
+
 /** Changes when a repeat stops: the steps it waits on, the rounds it allows, or both. */
 export function changeRepeat(
   loop: Loop,
@@ -136,6 +168,22 @@ export function changeRepeat(
   const steps = loop.steps.map((node) =>
     'repeat' in node && node.repeat.id === repeatId ? { repeat: { ...node.repeat, ...changes } } : node,
   );
+  return { ...loop, steps };
+}
+
+/** Makes the command step drawn at `position` run `command` instead. */
+export function changeCommand(loop: Loop, position: number, command: string): Loop {
+  const where = locate(loop, position);
+  if (!where) return loop;
+
+  const steps = [...loop.steps];
+  if (where.inner === undefined) {
+    steps[where.node] = { ...(steps[where.node] as Step), run: command };
+  } else {
+    const { repeat } = steps[where.node] as { repeat: RepeatGroup };
+    const inside = repeat.steps.map((step, i) => (i === where.inner ? { ...step, run: command } : step));
+    steps[where.node] = { repeat: { ...repeat, steps: inside } };
+  }
   return { ...loop, steps };
 }
 
