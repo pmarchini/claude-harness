@@ -33,6 +33,7 @@ const PALETTE = [
   { value: 'lint', label: 'Lint: passes when the lint command exits 0' },
   { value: 'report', label: 'Report: a summary when the loop ends' },
 ] as const
+const CLOSE_PALETTE = { value: 'back', label: '← Back to the graph, add nothing' }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -110,8 +111,8 @@ export const register: Register = on => {
           <Select
             key="block"
             label="Add a step"
-            options={PALETTE}
-            onSelect={block => change(s => addBlock(s, block))}
+            options={[...PALETTE, CLOSE_PALETTE]}
+            onSelect={block => change(s => (block === CLOSE_PALETTE.value ? { ...s, palette: undefined } : addBlock(s, block)))}
           />
         )}
         {repeat && (
@@ -195,7 +196,11 @@ function start(state: EditorState, choice: string): EditorState {
     return { ...state, message: 'Use letters, digits and dashes for the name, like build-until-green.' }
   }
 
-  const loop = choice === 'blank' ? blankLoop(name) : fromTemplate(choice as TemplateId, name, state.commands)
+  if (choice === 'blank') {
+    // Nothing to do on an empty graph but add a step, so the palette is already open.
+    return { ...state, stage: 'edit', loop: blankLoop(name), cursor: -1, palette: 'block', message: undefined }
+  }
+  const loop = fromTemplate(choice as TemplateId, name, state.commands)
   return { ...state, stage: 'edit', loop, cursor: -1, message: undefined }
 }
 
@@ -288,7 +293,8 @@ type Elements = ReturnType<EngineInterface['ui']['resolve']>
 /** The loop as an ASCII graph, one monospaced line per row, the cursor step heavy. */
 function Graph({ state, Box, Text }: { state: EditorState; Box: Elements['Box']; Text: Elements['Text'] }) {
   if (state.loop.steps.length === 0) {
-    return <Text dimColor>Empty loop. Press a to add the first step.</Text>
+    const next = state.palette ? 'Pick the first step below.' : 'Press a to add the first step.'
+    return <Text dimColor>Empty loop. {next}</Text>
   }
 
   const rows = renderLoop(state.loop, { selected: [state.cursor] }).split('\n')

@@ -204,3 +204,17 @@ test('the header names the loop, counts its steps and says whether it can be sav
   expect(await header(ui)).toBe('build-until-green · 1 step · ✓ ready to save')
   await ui.unmount()
 })
+
+test('a blank loop opens the palette at once, and the palette closes without adding a step', async ($, on) => {
+  const { ui } = await openEditor($, on)
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'blank' })
+
+  expect(await ui.find({ type: 'Select', key: 'block' })).toBeDefined()
+
+  await ui.select({ key: 'block', value: 'back' })
+
+  expect(await ui.find({ type: 'Select', key: 'block' })).toBeUndefined()
+  expect(await header(ui)).toContain('no steps yet')
+  await ui.unmount()
+})
