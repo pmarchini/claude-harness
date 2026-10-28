@@ -9,12 +9,15 @@ const FRAME_PADDING = 3;
 type PlacedBox = { step: Step; x: number };
 type PlacedFrame = { repeat: RepeatGroup; left: number; right: number; boxes: PlacedBox[] };
 
+/** Steps to draw with a heavy border, by position in drawing order (the editor's cursor). */
+export type RenderOptions = { selected?: number[] };
+
 /**
  * Draws a loop as an ASCII graph: steps are boxes joined left to right, and each
  * repeat group is a double-lined frame with an edge looping back from its last
  * step to its first.
  */
-export function renderLoop(loop: Loop): string {
+export function renderLoop(loop: Loop, { selected = [] }: RenderOptions = {}): string {
   const { boxes, frames, width } = layOut(loop);
   const hasFrames = frames.length > 0;
   const boxTop = hasFrames ? 2 : 0;
@@ -22,7 +25,7 @@ export function renderLoop(loop: Loop): string {
   const canvas = new Canvas(width, height);
 
   for (const frame of frames) drawFrame(canvas, frame, height);
-  for (const box of boxes) drawBox(canvas, box, boxTop);
+  boxes.forEach((box, position) => drawBox(canvas, box, boxTop, selected.includes(position)));
   drawArrows(canvas, boxes, boxTop + 1);
   for (const frame of frames) drawLoopBack(canvas, frame, boxTop + BOX_HEIGHT, height - 2);
 
@@ -74,13 +77,18 @@ function drawFrame(canvas: Canvas, { repeat, left, right }: PlacedFrame, height:
   }
 }
 
-function drawBox(canvas: Canvas, { step, x }: PlacedBox, top: number) {
+const LIGHT = { top: ['┌', '─', '┐'], side: '│', bottom: ['└', '─', '┘'] };
+const HEAVY = { top: ['┏', '━', '┓'], side: '┃', bottom: ['┗', '━', '┛'] };
+
+function drawBox(canvas: Canvas, { step, x }: PlacedBox, top: number, isSelected: boolean) {
   const inner = BOX_WIDTH - 2;
   const detail = step.run ?? `@${step.agent}`;
-  canvas.write(x, top, `┌${'─'.repeat(inner)}┐`);
-  canvas.write(x, top + 1, `│ ${fit(step.id, inner - 2)} │`);
-  canvas.write(x, top + 2, `│ ${fit(detail, inner - 2)} │`);
-  canvas.write(x, top + 3, `└${'─'.repeat(inner)}┘`);
+  const line = isSelected ? HEAVY : LIGHT;
+  const edge = ([left, fill, right]: string[]) => `${left}${fill.repeat(inner)}${right}`;
+  canvas.write(x, top, edge(line.top));
+  canvas.write(x, top + 1, `${line.side} ${fit(step.id, inner - 2)} ${line.side}`);
+  canvas.write(x, top + 2, `${line.side} ${fit(detail, inner - 2)} ${line.side}`);
+  canvas.write(x, top + 3, edge(line.bottom));
 }
 
 /** Joins consecutive boxes; frame walls the arrow crosses stay visible. */
