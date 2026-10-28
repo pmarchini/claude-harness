@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import type { Loop, RepeatGroup, Step } from './loop-file.ts';
+import type { Loop, RepeatGroup, Step } from './loop-rules.ts';
 
 export type StepRecord = { id: string; passed: boolean };
 export type RepeatRecord = { repeat: string; passed: boolean; rounds: StepRecord[][] };

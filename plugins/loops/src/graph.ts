@@ -1,4 +1,4 @@
-import type { Loop, RepeatGroup, Step } from './loop-file.ts';
+import type { Loop, RepeatGroup, Step } from './loop-rules.ts';
 
 const BOX_WIDTH = 15;
 const BOX_HEIGHT = 4;

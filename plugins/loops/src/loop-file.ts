@@ -2,16 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { parse, YAMLParseError } from 'yaml';
-
-export type Step = { id: string; run?: string; agent?: string };
-export type RepeatGroup = {
-  id: string;
-  until: string[];
-  max_rounds: number;
-  steps: Step[];
-};
-export type Node = Step | { repeat: RepeatGroup };
-export type Loop = { name: string; steps: Node[] };
+import { problemsIn, type Loop } from './loop-rules.ts';
 
 /** A loop with the file it was read from: `path` on disk, `source` as shown to the person. */
 export type LoadedLoop = { loop: Loop; path: string; source: string };
@@ -59,34 +50,4 @@ function parseLoop(text: string): Loop | string {
     if (!(error instanceof YAMLParseError)) throw error;
     return `not valid YAML (${error.message.split('\n')[0]})`;
   }
-}
-
-function problemsIn(loop: Loop): string[] {
-  if (typeof loop?.name !== 'string' || !Array.isArray(loop.steps)) {
-    return ['needs a name and a list of steps'];
-  }
-
-  const problems: string[] = [];
-  for (const node of loop.steps) {
-    if (!('repeat' in node)) {
-      problems.push(...stepProblems(node));
-      continue;
-    }
-
-    const { id, until, max_rounds, steps } = node.repeat;
-    if (!max_rounds) problems.push(`repeat "${id}" needs max_rounds`);
-
-    const insideIds = steps.map((step) => step.id);
-    for (const stepId of until.filter((u) => !insideIds.includes(u))) {
-      problems.push(`repeat "${id}" stops on "${stepId}", which is not a step inside it`);
-    }
-
-    problems.push(...steps.flatMap(stepProblems));
-  }
-  return problems;
-}
-
-function stepProblems(step: Step): string[] {
-  const hasOneAction = (step.run === undefined) !== (step.agent === undefined);
-  return hasOneAction ? [] : [`step "${step.id}" needs either run or agent`];
 }
