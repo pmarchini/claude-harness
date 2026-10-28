@@ -5,12 +5,12 @@ import { dirname, join } from 'node:path';
 
 const CLI = new URL('../src/cli.ts', import.meta.url).pathname;
 
-/** Creates a throwaway repo directory holding the given files (path → content). */
+/** Creates a throwaway repo directory holding the given files (path → content). Scripts (#!) are executable. */
 export function projectWith(files: Record<string, string>): string {
   const root = mkdtempSync(join(tmpdir(), 'loops-test-'));
   for (const [path, content] of Object.entries(files)) {
     mkdirSync(dirname(join(root, path)), { recursive: true });
-    writeFileSync(join(root, path), content);
+    writeFileSync(join(root, path), content, { mode: content.startsWith('#!') ? 0o755 : 0o644 });
   }
   return root;
 }
