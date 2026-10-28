@@ -37,6 +37,12 @@ async function openEditor(
 }
 
 type Surface = 'terminal' | 'desktop'
+type Editor = Awaited<ReturnType<typeof mountEditor>>
+
+/** The line above the graph: the loop's name, its size, and whether it can be saved. */
+async function header(ui: Editor) {
+  return (await ui.find({ type: 'Text', text: /^\S+ · (no steps yet|\d+ steps?) · / }))?.text
+}
 
 /** Starts a session in a repo holding `files`; what the pane writes lands in the array returned. */
 async function startSessionIn($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], files: string[]) {
@@ -182,5 +188,19 @@ test('Enter in the name field says what comes next', async ($, on) => {
   await ui.input({ key: 'name', text: 'build-until-green' })
 
   expect(await ui.find({ type: 'Text', text: /Now pick how to start build-until-green/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the header names the loop, counts its steps and says whether it can be saved', async ($, on) => {
+  const { ui } = await openEditor($, on, { files: ['pom.xml'] })
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'blank' })
+
+  expect(await header(ui)).toBe('build-until-green · no steps yet · add a step to save it')
+
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'implement' })
+
+  expect(await header(ui)).toBe('build-until-green · 1 step · ✓ ready to save')
   await ui.unmount()
 })

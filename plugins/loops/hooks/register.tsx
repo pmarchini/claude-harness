@@ -99,8 +99,12 @@ export const register: Register = on => {
     }
 
     const repeat = repeatAt(state.loop, state.cursor)
+    const blocker = whyNotSavable(state.loop)
     return (
       <Box flexDirection="column">
+        <Text bold>
+          {state.loop.name} · {describeCount(countSteps(state))} · {blocker ?? '✓ ready to save'}
+        </Text>
         <Graph state={state} Box={Box} Text={Text} />
         {state.palette === 'block' && (
           <Select
@@ -253,12 +257,24 @@ function wrapSelection(state: EditorState): EditorState {
   return { ...state, loop: wrapped, mark: undefined, message: 'Wrapped in a repeat.' }
 }
 
-/** Writes the loop to .claude/loops/<name>.yaml, unless it would not validate. */
+/** What stops the loop from being saved, as the end of a sentence; undefined when nothing does. */
+function whyNotSavable(loop: EditorState['loop']): string | undefined {
+  if (loop.steps.length === 0) return 'add a step to save it'
+  const problems = problemsIn(loop)
+  return problems.length > 0 ? problems.join('; ') : undefined
+}
+
+function describeCount(steps: number): string {
+  if (steps === 0) return 'no steps yet'
+  return steps === 1 ? '1 step' : `${steps} steps`
+}
+
+/** Writes the loop to .claude/loops/<name>.yaml, unless something stops it from being saved. */
 async function save($: EngineInterface): Promise<void> {
   const state = await read($, editor)
-  const problems = problemsIn(state.loop)
-  if (problems.length > 0) {
-    await update($, editor, s => ({ ...s, message: `Can't save yet: ${problems.join('; ')}` }))
+  const blocker = whyNotSavable(state.loop)
+  if (blocker) {
+    await update($, editor, s => ({ ...s, message: `Can't save yet: ${blocker}.` }))
     return
   }
 
