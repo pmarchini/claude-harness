@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { rmSync } from 'node:fs';
 import { renderLoop } from './graph.ts';
-import { loadLoops, type Loop } from './loop-file.ts';
+import { loadLoops, type LoadedLoop } from './loop-file.ts';
 import { readLatestRun, saveRun } from './run-folder.ts';
 import { runLoop, type RunRecord } from './runner.ts';
 
@@ -21,18 +22,18 @@ switch (command) {
   }
 
   case 'show': {
-    const loop = findLoop(args[0]);
-    if (loop) console.log(renderLoop(loop));
+    const found = findLoop(args[0]);
+    if (found) console.log(renderLoop(found.loop));
     break;
   }
 
   case 'run': {
     const [name, task] = args;
-    const loop = findLoop(name);
-    if (!loop) break;
+    const found = findLoop(name);
+    if (!found) break;
 
     const startedAt = new Date();
-    const record = runLoop(loop, {
+    const record = runLoop(found.loop, {
       projectDir,
       task,
       claudeBin: process.env.LOOPS_CLAUDE_BIN ?? 'claude',
@@ -43,6 +44,15 @@ switch (command) {
     break;
   }
 
+  case 'rm': {
+    const found = findLoop(args[0]);
+    if (!found) break;
+
+    rmSync(found.path);
+    console.log(`Removed ${found.loop.name} (${found.source})`);
+    break;
+  }
+
   case 'status': {
     const record = readLatestRun(projectDir);
     console.log(record ? describeRun(record) : 'No runs yet.');
@@ -50,15 +60,15 @@ switch (command) {
   }
 
   default:
-    console.error('Usage: loops validate | show <loop> | run <loop> "what to build" | status');
+    console.error('Usage: loops validate | show <loop> | run <loop> "what to build" | status | rm <loop>');
     process.exitCode = 1;
 }
 
 /** Finds a valid loop by name; when there is none, says which loops exist and sets a failing exit code. */
-function findLoop(name: string | undefined): Loop | undefined {
+function findLoop(name: string | undefined): LoadedLoop | undefined {
   const { loops } = loadLoops(projectDir);
   const found = loops.find(({ loop }) => loop.name === name);
-  if (found) return found.loop;
+  if (found) return found;
 
   const known = loops.map(({ loop }) => loop.name).join(', ') || 'none';
   console.error(`No loop named "${name}". Known loops: ${known}`);

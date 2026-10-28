@@ -13,8 +13,8 @@ export type RepeatGroup = {
 export type Node = Step | { repeat: RepeatGroup };
 export type Loop = { name: string; steps: Node[] };
 
-/** A loop together with the file it was read from, as shown to the person. */
-export type LoadedLoop = { loop: Loop; source: string };
+/** A loop with the file it was read from: `path` on disk, `source` as shown to the person. */
+export type LoadedLoop = { loop: Loop; path: string; source: string };
 export type LoadResult = { loops: LoadedLoop[]; problems: string[] };
 
 /**
@@ -34,8 +34,9 @@ export function loadLoops(projectDir: string): LoadResult {
     if (!existsSync(dir)) continue;
 
     for (const file of readdirSync(dir).filter((f) => f.endsWith('.yaml'))) {
+      const path = join(dir, file);
       const source = `${label}/${file}`;
-      const loop = parseLoop(readFileSync(join(dir, file), 'utf8'));
+      const loop = parseLoop(readFileSync(path, 'utf8'));
       if (typeof loop === 'string') {
         problems.push(`${source}: ${loop}`);
         continue;
@@ -43,7 +44,7 @@ export function loadLoops(projectDir: string): LoadResult {
 
       const fileProblems = problemsIn(loop).map((p) => `${source}: ${p}`);
       problems.push(...fileProblems);
-      if (fileProblems.length === 0) loopsByName.set(loop.name, { loop, source });
+      if (fileProblems.length === 0) loopsByName.set(loop.name, { loop, path, source });
     }
   }
 
