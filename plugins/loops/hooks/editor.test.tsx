@@ -284,3 +284,23 @@ test('the step under the cursor says what it does, and a command step can run an
   expect(written[0]?.text).toContain('run: "./mvnw verify"')
   await ui.unmount()
 })
+
+test('adding the first check says that steps run once until a repeat makes them go round', async ($, on) => {
+  const { ui } = await openEditor($, on, { files: ['pom.xml'] })
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'blank' })
+  await ui.select({ key: 'block', value: 'implement' })
+
+  expect(await ui.find({ type: 'Text', text: 'Added implement.' })).toBeDefined()
+
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'tests' })
+
+  expect(
+    await ui.find({
+      type: 'Text',
+      text: 'Added tests after implement. Every step runs once for now: to go round until tests passes, press r.',
+    }),
+  ).toBeDefined()
+  await ui.unmount()
+})

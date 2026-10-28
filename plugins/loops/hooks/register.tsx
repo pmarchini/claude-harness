@@ -249,8 +249,15 @@ function addBlock(state: EditorState, block: string): EditorState {
     report: BLOCKS.report,
   }[block as (typeof PALETTE)[number]['value']]
   const { loop, position } = addAfter(state.loop, state.cursor, step)
+  const added = drawnSteps(loop)[position]!
+  const before = drawnSteps(loop)[position - 1]
+  const hasRepeat = loop.steps.some(node => 'repeat' in node)
 
-  return { ...state, loop, cursor: position, picker: undefined, message: `Added ${step.id}.` }
+  const message = [before ? `Added ${added.id} after ${before.id}.` : `Added ${added.id}.`]
+  if (added.run !== undefined && !hasRepeat) {
+    message.push(`Every step runs once for now: to go round until ${added.id} passes, press r.`)
+  }
+  return { ...state, loop, cursor: position, picker: undefined, message: message.join(' ') }
 }
 
 function removeStep(state: EditorState): EditorState {
