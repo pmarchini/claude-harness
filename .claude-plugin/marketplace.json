@@ -1,0 +1,11 @@
+{
+  "name": "claude-harness",
+  "owner": { "name": "Pietro Marchini" },
+  "plugins": [
+    {
+      "name": "loops",
+      "source": "./plugins/loops",
+      "description": "Define loops of steps and checks (tests, mutation testing, review agents, repeat-until rounds) and run them against an implementation."
+    }
+  ]
+}

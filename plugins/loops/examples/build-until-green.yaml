@@ -1,0 +1,15 @@
+name: build-until-green
+steps:
+  - id: plan
+    agent: planner            # an agent step: Claude, handed to the named subagent
+  - repeat:                   # a repeat group: runs its steps again, round after round
+      id: build
+      until: [tests]          # stops when all of these steps pass in the same round
+      max_rounds: 10          # required: a repeat can never run forever
+      steps:
+        - id: implement
+          agent: main         # "main" means Claude itself, not a subagent
+        - id: tests
+          run: npm test       # a shell step: passes when the command exits 0
+  - id: report
+    agent: reporter

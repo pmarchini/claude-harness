@@ -1,0 +1,23 @@
+name: loops
+
+on:
+  pull_request:
+    paths: ['plugins/loops/**', '.github/workflows/loops.yml']
+  push:
+    branches: [develop]
+    paths: ['plugins/loops/**', '.github/workflows/loops.yml']
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/loops
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test

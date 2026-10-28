@@ -1,0 +1,5 @@
+{
+  "name": "loops",
+  "version": "0.1.0",
+  "description": "Define loops of steps and checks (tests, mutation testing, review agents, repeat-until rounds) and run them against an implementation."
+}
