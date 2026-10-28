@@ -1,4 +1,4 @@
-import type { Loop, RepeatGroup, Step } from './loop-file.ts';
+import type { Loop, RepeatGroup, Step } from './loop-rules.ts';
 
 const BOX_WIDTH = 15;
 const BOX_HEIGHT = 4;
@@ -9,12 +9,15 @@ const FRAME_PADDING = 3;
 type PlacedBox = { step: Step; x: number };
 type PlacedFrame = { repeat: RepeatGroup; left: number; right: number; boxes: PlacedBox[] };
 
+/** Steps to draw with a heavy border, by position in drawing order (the editor's cursor). */
+export type RenderOptions = { selected?: number[] };
+
 /**
  * Draws a loop as an ASCII graph: steps are boxes joined left to right, and each
  * repeat group is a double-lined frame with an edge looping back from its last
  * step to its first.
  */
-export function renderLoop(loop: Loop): string {
+export function renderLoop(loop: Loop, { selected = [] }: RenderOptions = {}): string {
   const { boxes, frames, width } = layOut(loop);
   const hasFrames = frames.length > 0;
   const boxTop = hasFrames ? 2 : 0;
@@ -22,7 +25,7 @@ export function renderLoop(loop: Loop): string {
   const canvas = new Canvas(width, height);
 
   for (const frame of frames) drawFrame(canvas, frame, height);
-  for (const box of boxes) drawBox(canvas, box, boxTop);
+  boxes.forEach((box, position) => drawBox(canvas, box, boxTop, selected.includes(position)));
   drawArrows(canvas, boxes, boxTop + 1);
   for (const frame of frames) drawLoopBack(canvas, frame, boxTop + BOX_HEIGHT, height - 2);
 
@@ -48,7 +51,8 @@ function layOut(loop: Loop) {
       step,
       x: x + i * (BOX_WIDTH + ARROW_LENGTH),
     }));
-    const contentRight = inside[inside.length - 1].x + BOX_WIDTH + FRAME_PADDING;
+    // A valid repeat has at least one step.
+    const contentRight = inside.at(-1)!.x + BOX_WIDTH + FRAME_PADDING;
     const right = Math.max(contentRight, left + frameLabel(node.repeat).length + 4);
 
     boxes.push(...inside);
@@ -74,28 +78,34 @@ function drawFrame(canvas: Canvas, { repeat, left, right }: PlacedFrame, height:
   }
 }
 
-function drawBox(canvas: Canvas, { step, x }: PlacedBox, top: number) {
+type Edge = readonly [left: string, fill: string, right: string];
+const LIGHT = { top: ['┌', '─', '┐'] as Edge, side: '│', bottom: ['└', '─', '┘'] as Edge };
+const HEAVY = { top: ['┏', '━', '┓'] as Edge, side: '┃', bottom: ['┗', '━', '┛'] as Edge };
+
+function drawBox(canvas: Canvas, { step, x }: PlacedBox, top: number, isSelected: boolean) {
   const inner = BOX_WIDTH - 2;
   const detail = step.run ?? `@${step.agent}`;
-  canvas.write(x, top, `┌${'─'.repeat(inner)}┐`);
-  canvas.write(x, top + 1, `│ ${fit(step.id, inner - 2)} │`);
-  canvas.write(x, top + 2, `│ ${fit(detail, inner - 2)} │`);
-  canvas.write(x, top + 3, `└${'─'.repeat(inner)}┘`);
+  const line = isSelected ? HEAVY : LIGHT;
+  const edge = ([left, fill, right]: Edge) => `${left}${fill.repeat(inner)}${right}`;
+  canvas.write(x, top, edge(line.top));
+  canvas.write(x, top + 1, `${line.side} ${fit(step.id, inner - 2)} ${line.side}`);
+  canvas.write(x, top + 2, `${line.side} ${fit(detail, inner - 2)} ${line.side}`);
+  canvas.write(x, top + 3, edge(line.bottom));
 }
 
 /** Joins consecutive boxes; frame walls the arrow crosses stay visible. */
 function drawArrows(canvas: Canvas, boxes: PlacedBox[], y: number) {
   for (let i = 1; i < boxes.length; i++) {
-    const from = boxes[i - 1].x + BOX_WIDTH;
-    const to = boxes[i].x - 1;
+    const from = boxes[i - 1]!.x + BOX_WIDTH;
+    const to = boxes[i]!.x - 1;
     for (let x = from; x < to; x++) canvas.writeIfEmpty(x, y, '─');
     canvas.write(to, y, '>');
   }
 }
 
 function drawLoopBack(canvas: Canvas, { boxes }: PlacedFrame, firstRow: number, edgeRow: number) {
-  const start = boxes[0].x + 4;
-  const end = boxes[boxes.length - 1].x + BOX_WIDTH - 5;
+  const start = boxes[0]!.x + 4;
+  const end = boxes.at(-1)!.x + BOX_WIDTH - 5;
   for (let y = firstRow; y < edgeRow; y++) {
     canvas.write(start, y, y === firstRow ? '^' : '│');
     canvas.write(end, y, '│');
@@ -120,11 +130,13 @@ class Canvas {
   }
 
   write(x: number, y: number, text: string) {
-    [...text].forEach((char, i) => (this.rows[y][x + i] = char));
+    const row = this.rows[y]!;
+    [...text].forEach((char, i) => (row[x + i] = char));
   }
 
   writeIfEmpty(x: number, y: number, char: string) {
-    if (this.rows[y][x] === ' ') this.rows[y][x] = char;
+    const row = this.rows[y]!;
+    if (row[x] === ' ') row[x] = char;
   }
 
   toString(): string {

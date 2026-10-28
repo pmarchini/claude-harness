@@ -78,7 +78,7 @@ steps:
   });
 
   assert.equal(result.exitCode, 0, result.stderr);
-  const [firstPrompt, secondPrompt] = readFileSync(join(project, 'prompts.log'), 'utf8').split('\n---\n');
+  const [firstPrompt = '', secondPrompt = ''] = readFileSync(join(project, 'prompts.log'), 'utf8').split('\n---\n');
   assert.match(firstPrompt, /add a refund endpoint/);
   assert.doesNotMatch(firstPrompt, /failed/);
   assert.match(secondPrompt, /add a refund endpoint/);
@@ -148,5 +148,15 @@ test('run refuses a loop name it does not know, and starts nothing', () => {
 
   assert.equal(result.exitCode, 1);
   assert.match(result.stderr, /No loop named "lint-frist"\. Known loops: lint-first/);
+  assert.match(runLoops(project, ['status']).stdout, /No runs yet/);
+});
+
+test('run asks what to build when no description is given, and starts nothing', () => {
+  const project = projectWith({ '.claude/loops/lint-first.yaml': 'name: lint-first\nsteps:\n  - id: lint\n    run: "true"\n' });
+
+  const result = runLoops(project, ['run', 'lint-first']);
+
+  assert.equal(result.exitCode, 1);
+  assert.match(result.stderr, /Say what to build: loops run lint-first "what to build"/);
   assert.match(runLoops(project, ['status']).stdout, /No runs yet/);
 });

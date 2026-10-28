@@ -11,6 +11,7 @@ build:
 	cd $(PLUGIN_DIR) && npm ci
 	cd $(PLUGIN_DIR) && npm run typecheck
 	cd $(PLUGIN_DIR) && npm test
+	claude plugin test $(PLUGIN_DIR)
 	claude plugin validate .
 
 # Both claude commands are safe to repeat: they report "already added/installed".
