@@ -11,6 +11,7 @@ import {
   detectCommands,
   fromTemplate,
   remove,
+  repeatChoices,
   toYaml,
   wrapInRepeat,
 } from '../src/editor.ts';
@@ -139,4 +140,25 @@ test('the test and lint commands come from the build files the repo has', () => 
   assert.deepEqual(detectCommands(['package.json']), { tests: 'npm test', lint: 'npm run lint' });
   assert.deepEqual(detectCommands(['build.gradle.kts']), { tests: './gradlew test', lint: './gradlew check' });
   assert.deepEqual(detectCommands(['main.go']), { tests: 'make test', lint: 'make lint' });
+});
+
+test('the steps a repeat can hold around the cursor: the step before it and the cursor first, then the rest', () => {
+  const loop = loopOf(BLOCKS.plan, BLOCKS.implement, BLOCKS.tests('npm test'), BLOCKS.report);
+
+  // The cursor on tests (2): doing then checking is the usual pair.
+  assert.deepEqual(repeatChoices(loop, 2), [
+    { first: 1, last: 2 },
+    { first: 2, last: 2 },
+    { first: 2, last: 3 },
+    { first: 0, last: 2 },
+    { first: 1, last: 3 },
+    { first: 0, last: 3 },
+  ]);
+});
+
+test('a repeat never takes in a step already inside another one', () => {
+  const loop = wrap(loopOf(BLOCKS.plan, BLOCKS.implement, BLOCKS.tests('npm test'), BLOCKS.report), 1, 2);
+
+  assert.deepEqual(repeatChoices(loop, 3), [{ first: 3, last: 3 }]);
+  assert.deepEqual(repeatChoices(loop, 1), []);
 });

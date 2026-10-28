@@ -12,10 +12,8 @@ export type EditorState = {
   loop: { name: string; steps: EditorNode[] };
   /** The step the next edit acts on, in drawing order; -1 before the first. */
   cursor: number;
-  /** Where a range for "wrap in a repeat" starts, when one is marked. */
-  mark?: number;
-  /** Whether the block palette is open. */
-  palette?: 'block';
+  /** The list open under the graph: blocks to add, or steps to wrap in a repeat. */
+  picker?: 'block' | 'range';
   commands: { tests: string; lint: string };
   /** A line telling the person what just happened or what is wrong. */
   message?: string;

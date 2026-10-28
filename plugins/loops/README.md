@@ -26,7 +26,7 @@ Claude Code ships its own `/loops`, so the plugin's command is `/loop-manager`. 
 | `h` / `l` | move the cursor to the previous or next step |
 | `a` | add a step after the cursor from the palette (inside a repeat when the cursor is) |
 | `x` | remove the step under the cursor |
-| `m`, then `r` | mark one end, move to the other, wrap the steps in a repeat (`r` alone wraps the cursor's step) |
+| `r` | repeat: pick which steps around the cursor go round together (the step before it and the cursor's step are suggested) |
 | `s` | save to `.claude/loops/<name>.yaml`, once it validates |
 
 With the cursor inside a repeat, the pane also shows its settings: which step it waits on (or every step), and how many rounds it may take before it stops anyway. The test and lint commands come from the repo's build files (Maven, Gradle, npm).

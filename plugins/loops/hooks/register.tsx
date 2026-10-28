@@ -10,6 +10,7 @@ import {
   fromTemplate,
   remove,
   repeatAt,
+  repeatChoices,
   TEMPLATES,
   toYaml,
   wrapInRepeat,
@@ -23,7 +24,7 @@ const EDITOR_PANE = 'loops-editor'
 
 // Change the tag when EditorState's fields change: it declines what an
 // earlier version stored, which outlives a reload.
-const editor = atom({ plugin: 'loops', key: 'editor' } as const, newEditor(), { shape: 'editor-1' })
+const editor = atom({ plugin: 'loops', key: 'editor' } as const, newEditor(), { shape: 'editor-2' })
 
 /** The palette, in the order it lists blocks. */
 const PALETTE = [
@@ -33,7 +34,8 @@ const PALETTE = [
   { value: 'lint', label: 'Lint: passes when the lint command exits 0' },
   { value: 'report', label: 'Report: a summary when the loop ends' },
 ] as const
-const CLOSE_PALETTE = { value: 'back', label: '← Back to the graph, add nothing' }
+/** The last option of every picker: leave it without changing anything. */
+const BACK = { value: 'back', label: '← Back to the graph' }
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -101,21 +103,31 @@ export const register: Register = on => {
 
     const repeat = repeatAt(state.loop, state.cursor)
     const blocker = whyNotSavable(state.loop)
+    const steps = countSteps(state)
+    const isOnStep = state.cursor >= 0
     return (
       <Box flexDirection="column">
         <Text bold>
-          {state.loop.name} · {describeCount(countSteps(state))} · {blocker ?? '✓ ready to save'}
+          {state.loop.name} · {describeCount(steps)} · {blocker ?? '✓ ready to save'}
         </Text>
         <Graph state={state} Box={Box} Text={Text} />
-        {state.palette === 'block' && (
+        {state.picker === 'block' && (
           <Select
             key="block"
             label="Add a step"
-            options={[...PALETTE, CLOSE_PALETTE]}
-            onSelect={block => change(s => (block === CLOSE_PALETTE.value ? { ...s, palette: undefined } : addBlock(s, block)))}
+            options={[...PALETTE, BACK]}
+            onSelect={block => change(s => (block === BACK.value ? closePicker(s) : addBlock(s, block)))}
           />
         )}
-        {repeat && (
+        {state.picker === 'range' && (
+          <Select
+            key="range"
+            label="Repeat which steps?"
+            options={[...rangeOptions(state), BACK]}
+            onSelect={range => change(s => (range === BACK.value ? closePicker(s) : wrapRange(s, range)))}
+          />
+        )}
+        {repeat && !state.picker && (
           <Box flexDirection="column">
             <Text bold>Repeat: goes round until these pass, or stops after the round limit</Text>
             <Select
@@ -137,27 +149,34 @@ export const register: Register = on => {
           </Box>
         )}
         <Box flexDirection="row" gap={2}>
-          <Button key="prev" hotkey="h" onPress={() => change(s => moveCursor(s, -1))}>
-            ← prev
+          {steps > 1 && (
+            <Button key="prev" hotkey="h" onPress={() => change(s => moveCursor(s, -1))}>
+              ← prev
+            </Button>
+          )}
+          {steps > 1 && (
+            <Button key="next" hotkey="l" onPress={() => change(s => moveCursor(s, +1))}>
+              next →
+            </Button>
+          )}
+          <Button key="add" hotkey="a" onPress={() => change(s => ({ ...s, picker: 'block' }))}>
+            {steps === 0 ? 'add a step' : 'add after'}
           </Button>
-          <Button key="next" hotkey="l" onPress={() => change(s => moveCursor(s, +1))}>
-            next →
-          </Button>
-          <Button key="add" hotkey="a" onPress={() => change(s => ({ ...s, palette: 'block' }))}>
-            add after
-          </Button>
-          <Button key="remove" hotkey="x" onPress={() => change(removeStep)}>
-            remove
-          </Button>
-          <Button key="mark" hotkey="m" onPress={() => change(s => ({ ...s, mark: s.cursor, message: 'Marked. Move to the other end and press r.' }))}>
-            mark
-          </Button>
-          <Button key="repeat" hotkey="r" onPress={() => change(wrapSelection)}>
-            repeat
-          </Button>
-          <Button key="save" hotkey="s" variant="primary" onPress={() => save($)}>
-            save
-          </Button>
+          {isOnStep && (
+            <Button key="remove" hotkey="x" onPress={() => change(removeStep)}>
+              remove
+            </Button>
+          )}
+          {isOnStep && !repeat && (
+            <Button key="repeat" hotkey="r" onPress={() => change(s => ({ ...s, picker: 'range' }))}>
+              repeat…
+            </Button>
+          )}
+          {steps > 0 && (
+            <Button key="save" hotkey="s" variant="primary" onPress={() => save($)}>
+              save
+            </Button>
+          )}
         </Box>
         {state.message && <Text dimColor>{state.message}</Text>}
       </Box>
@@ -198,7 +217,7 @@ function start(state: EditorState, choice: string): EditorState {
 
   if (choice === 'blank') {
     // Nothing to do on an empty graph but add a step, so the palette is already open.
-    return { ...state, stage: 'edit', loop: blankLoop(name), cursor: -1, palette: 'block', message: undefined }
+    return { ...state, stage: 'edit', loop: blankLoop(name), cursor: -1, picker: 'block', message: undefined }
   }
   const loop = fromTemplate(choice as TemplateId, name, state.commands)
   return { ...state, stage: 'edit', loop, cursor: -1, message: undefined }
@@ -214,14 +233,14 @@ function addBlock(state: EditorState, block: string): EditorState {
   }[block as (typeof PALETTE)[number]['value']]
   const { loop, position } = addAfter(state.loop, state.cursor, step)
 
-  return { ...state, loop, cursor: position, palette: undefined, message: `Added ${step.id}.` }
+  return { ...state, loop, cursor: position, picker: undefined, message: `Added ${step.id}.` }
 }
 
 function removeStep(state: EditorState): EditorState {
   if (state.cursor < 0) return state
 
   const loop = remove(state.loop, state.cursor)
-  return { ...state, loop, cursor: Math.max(-1, state.cursor - 1), mark: undefined }
+  return { ...state, loop, cursor: Math.max(-1, state.cursor - 1) }
 }
 
 /** Makes the cursor's repeat wait on one of its steps, or on all of them (`all`). */
@@ -250,16 +269,34 @@ function moveCursor(state: EditorState, delta: number): EditorState {
 }
 
 function countSteps(state: EditorState): number {
-  return state.loop.steps.reduce((n, node) => n + ('repeat' in node ? node.repeat.steps.length : 1), 0)
+  return drawnStepIds(state.loop).length
 }
 
-/** Wraps the steps between the mark and the cursor (or the cursor's step alone) in a repeat. */
-function wrapSelection(state: EditorState): EditorState {
-  const anchor = state.mark ?? state.cursor
-  const wrapped = wrapInRepeat(state.loop, Math.min(anchor, state.cursor), Math.max(anchor, state.cursor))
-  if (typeof wrapped === 'string') return { ...state, mark: undefined, message: wrapped }
+function closePicker(state: EditorState): EditorState {
+  return { ...state, picker: undefined }
+}
 
-  return { ...state, loop: wrapped, mark: undefined, message: 'Wrapped in a repeat.' }
+/** The runs of steps the cursor's step could repeat with, as options named by their ends. */
+function rangeOptions(state: EditorState) {
+  const ids = drawnStepIds(state.loop)
+  return repeatChoices(state.loop, state.cursor).map(({ first, last }, i) => {
+    const steps = first === last ? `${ids[first]} alone` : `${ids[first]} → ${ids[last]}`
+    return { value: `${first}-${last}`, label: i === 0 ? `${steps} (suggested)` : steps }
+  })
+}
+
+/** Wraps the run of steps an option of `rangeOptions` names in a repeat. */
+function wrapRange(state: EditorState, range: string): EditorState {
+  const [first = 0, last = 0] = range.split('-').map(Number)
+  const wrapped = wrapInRepeat(state.loop, first, last)
+  if (typeof wrapped === 'string') return { ...state, picker: undefined, message: wrapped }
+
+  return { ...state, loop: wrapped, picker: undefined, message: 'Wrapped in a repeat.' }
+}
+
+/** Every step's id, in drawing order. */
+function drawnStepIds(loop: EditorState['loop']): string[] {
+  return loop.steps.flatMap(node => ('repeat' in node ? node.repeat.steps : [node])).map(step => step.id)
 }
 
 /** What stops the loop from being saved, as the end of a sentence; undefined when nothing does. */
@@ -293,7 +330,7 @@ type Elements = ReturnType<EngineInterface['ui']['resolve']>
 /** The loop as an ASCII graph, one monospaced line per row, the cursor step heavy. */
 function Graph({ state, Box, Text }: { state: EditorState; Box: Elements['Box']; Text: Elements['Text'] }) {
   if (state.loop.steps.length === 0) {
-    const next = state.palette ? 'Pick the first step below.' : 'Press a to add the first step.'
+    const next = state.picker ? 'Pick the first step below.' : 'Press a to add the first step.'
     return <Text dimColor>Empty loop. {next}</Text>
   }
 

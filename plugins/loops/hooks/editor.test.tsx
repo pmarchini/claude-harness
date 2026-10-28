@@ -39,6 +39,10 @@ async function openEditor(
 type Surface = 'terminal' | 'desktop'
 type Editor = Awaited<ReturnType<typeof mountEditor>>
 
+async function buttons(ui: Editor) {
+  return (await ui.findAll({ type: 'Button' })).map(button => button.key)
+}
+
 /** The line above the graph: the loop's name, its size, and whether it can be saved. */
 async function header(ui: Editor) {
   return (await ui.find({ type: 'Text', text: /^\S+ · (no steps yet|\d+ steps?) · / }))?.text
@@ -90,9 +94,10 @@ test('implement and tests wrapped in a repeat save as a loop that goes round unt
   }
 
   await ui.press({ key: 'prev' }) // cursor on tests
-  await ui.press({ key: 'mark' })
-  await ui.press({ key: 'prev' }) // cursor on implement
   await ui.press({ key: 'repeat' })
+  const range = await ui.find({ type: 'Select', key: 'range' })
+  expect((range?.props.options as Array<{ label: string }>)[0]?.label).toBe('implement → tests (suggested)')
+  await ui.select({ key: 'range', value: '1-2' })
   await ui.press({ key: 'save' })
 
   expect(written).toHaveLength(1)
@@ -216,5 +221,25 @@ test('a blank loop opens the palette at once, and the palette closes without add
 
   expect(await ui.find({ type: 'Select', key: 'block' })).toBeUndefined()
   expect(await header(ui)).toContain('no steps yet')
+  await ui.unmount()
+})
+
+test('only the actions that can do something are offered', async ($, on) => {
+  const { ui } = await openEditor($, on)
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'blank' })
+  await ui.select({ key: 'block', value: 'back' })
+
+  expect(await buttons(ui)).toEqual(['add'])
+
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'implement' })
+
+  expect(await buttons(ui)).toEqual(['add', 'remove', 'repeat', 'save'])
+
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'tests' })
+
+  expect(await buttons(ui)).toEqual(['prev', 'next', 'add', 'remove', 'repeat', 'save'])
   await ui.unmount()
 })

@@ -127,6 +127,37 @@ export function wrapInRepeat(loop: Loop, first: number, last: number): Loop | st
   return { ...loop, steps };
 }
 
+/** A run of steps, by their positions in drawing order, first and last included. */
+export type Range = { first: number; last: number };
+
+/**
+ * The runs of steps around `position` that a repeat could hold, the likeliest
+ * first: the step before it with it (do, then check), then the shorter runs.
+ * Steps already inside a repeat are never part of one, as repeats do not nest.
+ */
+export function repeatChoices(loop: Loop, position: number): Range[] {
+  const isOutsideRepeats = (p: number) => {
+    const where = p < 0 ? undefined : locate(loop, p);
+    return where !== undefined && where.inner === undefined;
+  };
+  if (!isOutsideRepeats(position)) return [];
+
+  let lowest = position;
+  while (isOutsideRepeats(lowest - 1)) lowest -= 1;
+  let highest = position;
+  while (isOutsideRepeats(highest + 1)) highest += 1;
+
+  const choices: Range[] = [];
+  for (let first = lowest; first <= position; first++) {
+    for (let last = position; last <= highest; last++) choices.push({ first, last });
+  }
+  const isDoThenCheck = ({ first, last }: Range) => first === position - 1 && last === position;
+  const length = ({ first, last }: Range) => last - first;
+  return choices.sort(
+    (a, b) => Number(isDoThenCheck(b)) - Number(isDoThenCheck(a)) || length(a) - length(b) || a.first - b.first,
+  );
+}
+
 /** Changes when a repeat stops: the steps it waits on, the rounds it allows, or both. */
 export function changeRepeat(
   loop: Loop,
