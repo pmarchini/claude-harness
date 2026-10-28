@@ -170,3 +170,34 @@ test('a name that is not a plain file name is refused, so the loop is never writ
   expect(await ui.find({ type: 'Select', key: 'start' })).toBeDefined()
   await ui.unmount()
 })
+
+test('a name typed without pressing Enter is kept when the start is picked', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.list', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+
+  await ui.input({ key: 'name', text: 'build-until-green', kind: 'change' })
+  await ui.select({ key: 'start', value: 'blank' })
+
+  expect(await ui.find({ type: 'Text', text: /Empty loop/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('Enter in the name field says what comes next', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.list', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+
+  await ui.input({ key: 'name', text: 'build-until-green' })
+
+  expect(await ui.find({ type: 'Text', text: /Now pick how to start build-until-green/ })).toBeDefined()
+  await ui.unmount()
+})

@@ -74,8 +74,15 @@ export const register: Register = on => {
           <Input
             key="name"
             label="Name"
+            placeholder="build-until-green"
+            submitLabel="next"
+            autoFocus
             value={state.loop.name}
-            onSubmit={name => change(s => ({ ...s, loop: { ...s.loop, name } }))}
+            // Kept as typed, so picking a start without pressing Enter still has the name.
+            onInput={name => change(s => ({ ...s, loop: { ...s.loop, name }, message: undefined }))}
+            onSubmit={name =>
+              change(s => ({ ...s, loop: { ...s.loop, name }, message: `Now pick how to start ${name.trim()}, below.` }))
+            }
           />
           <Select
             key="start"
