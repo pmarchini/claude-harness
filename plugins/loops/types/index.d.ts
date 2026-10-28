@@ -14,8 +14,8 @@ export type EditorState = {
   cursor: number;
   /** Where a range for "wrap in a repeat" starts, when one is marked. */
   mark?: number;
-  /** What the palette is asking for, when it is open. */
-  palette?: 'block' | 'command';
+  /** Whether the block palette is open. */
+  palette?: 'block';
   commands: { tests: string; lint: string };
   /** A line telling the person what just happened or what is wrong. */
   message?: string;

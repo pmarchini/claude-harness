@@ -139,6 +139,13 @@ export function changeRepeat(
   return { ...loop, steps };
 }
 
+/** The repeat the step drawn at `position` belongs to, if it is inside one. */
+export function repeatAt(loop: Loop, position: number): RepeatGroup | undefined {
+  const where = locate(loop, position);
+  if (where?.inner === undefined) return undefined;
+  return (loop.steps[where.node] as { repeat: RepeatGroup }).repeat;
+}
+
 /** `id`, or `id-2`, `id-3`… when the loop already has a step called that. */
 function unusedId(loop: Loop, id: string): string {
   const taken = new Set(loop.steps.flatMap((node) => ('repeat' in node ? node.repeat.steps : [node])).map((s) => s.id));

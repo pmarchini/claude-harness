@@ -21,3 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
+      - name: Editor pane tests
+        run: |
+          npm install --global @anthropic-ai/claude-code
+          claude plugin test .

@@ -38,4 +38,5 @@ Each round of a repeat starts with fresh context: agent steps get the task plus 
 2. Detect the test command from the repo (package.json scripts, pom.xml → `mvn -q test`, build.gradle → `./gradlew test`) instead of guessing.
 3. Show the person the diff and the new graph, and ask before writing.
 4. After writing, run `node "${CLAUDE_PLUGIN_ROOT}/src/cli.ts" validate`. If it exits 3, fix the reported problem before saying you are done.
-5. To delete a loop, confirm with the person, then run `node "${CLAUDE_PLUGIN_ROOT}/src/cli.ts" rm <loop>`.
+5. If the person would rather build it by hand, point them to `/loop-manager new`, which opens the editor pane.
+6. To delete a loop, confirm with the person, then run `node "${CLAUDE_PLUGIN_ROOT}/src/cli.ts" rm <loop>`.

@@ -74,3 +74,99 @@ test('implement and tests wrapped in a repeat save as a loop that goes round unt
   expect(await ui.find({ type: 'Text', text: /Saved \.claude\/loops\/build-until-green\.yaml/ })).toBeDefined()
   await ui.unmount()
 })
+
+test('with the cursor inside a repeat, its until and round limit can be changed before saving', async ($, on) => {
+  const written: string[] = []
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.list', () => ({ value: [{ name: 'package.json', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }))
+  on('fs.write', (_, e) => {
+    written.push(e.text)
+    return { value: undefined }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  const ui = await $.ui.mount({ ...EDITOR, surface: 'desktop' })
+  await ui.input({ key: 'name', text: 'green-and-clean' })
+  await ui.select({ key: 'start', value: 'repeat-until-done' })
+  await ui.press({ key: 'next' }) // plan
+  await ui.press({ key: 'next' }) // implement
+  await ui.press({ key: 'next' }) // tests
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'lint' }) // joins the repeat, after tests
+
+  await ui.select({ key: 'until', value: 'all' })
+  await ui.input({ key: 'rounds', text: '15' })
+  await ui.press({ key: 'save' })
+
+  expect(written[0]).toContain('until: [implement, tests, lint]')
+  expect(written[0]).toContain('max_rounds: 15')
+  await ui.unmount()
+})
+
+test('x removes the step under the cursor', async ($, on) => {
+  const written: string[] = []
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.list', () => ({ value: [] }))
+  on('fs.write', (_, e) => {
+    written.push(e.text)
+    return { value: undefined }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  await ui.input({ key: 'name', text: 'any-loop' })
+  await ui.select({ key: 'start', value: 'blank' })
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'tests' })
+  await ui.press({ key: 'add' })
+  await ui.select({ key: 'block', value: 'report' })
+
+  await ui.press({ key: 'remove' })
+  await ui.press({ key: 'save' })
+
+  expect(written[0]).toContain('id: tests')
+  expect(written[0]).not.toContain('id: report')
+  await ui.unmount()
+})
+
+test('every other subcommand runs the loops CLI and shows what it printed', async ($, on) => {
+  const ran: string[][] = []
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('process.run', (_, e) => {
+    ran.push([...e.argv])
+    return { value: { exitCode: 0, stdout: '✓ build-until-green\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
+  })
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+
+  const answer = await $.command.run({
+    command: 'loop-manager',
+    args: 'run build-until-green "add a refund endpoint"',
+    ...TYPED,
+  })
+
+  expect(ran[0]?.slice(-3)).toEqual(['run', 'build-until-green', 'add a refund endpoint'])
+  expect(ran[0]?.[1]).toMatch(/\/src\/cli\.ts$/)
+  expect(answer.text).toContain('✓ build-until-green')
+})
+
+test('a name that is not a plain file name is refused, so the loop is never written outside .claude/loops', async ($, on) => {
+  on('command.register', () => ({ value: { command: 'loop-manager' } }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('fs.list', () => ({ value: [] }))
+  on('session.start', (_, e) => ({ cwd: e.cwd }))
+  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+
+  await ui.input({ key: 'name', text: '../../settings' })
+  await ui.select({ key: 'start', value: 'blank' })
+
+  expect(await ui.find({ type: 'Text', text: /Use letters, digits and dashes/ })).toBeDefined()
+  expect(await ui.find({ type: 'Select', key: 'start' })).toBeDefined()
+  await ui.unmount()
+})
