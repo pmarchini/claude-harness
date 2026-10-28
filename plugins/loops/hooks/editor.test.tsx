@@ -1,6 +1,7 @@
 // The `/loops new` pane, driven the way a person drives it, on the surfaces
 // that take input. Each hook given to `on` stands for the engine.
 import { expect, test } from 'claude-code/testing'
+import type { TestBody } from 'claude-code/testing'
 
 const EDITOR = {
   plugin: 'loops',
@@ -19,16 +20,49 @@ const EDITOR = {
 /** What a command typed in the composer carries besides its name and arguments. */
 const TYPED = { origin: { kind: 'composer' }, presentation: { isFullscreen: false, columns: 160 } } as const
 
-test('a blank loop gets its first step from the palette', async ($, on) => {
+/** A file at the repo's root, as `fs.list` lists it. */
+const file = (name: string) => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLink: false }) as const
+
+/**
+ * Runs `/loop-manager new` in a repo holding `files` and mounts the pane on
+ * `surface`. `written` collects what the pane saves.
+ */
+async function openEditor(
+  $: Parameters<TestBody>[0],
+  on: Parameters<TestBody>[1],
+  { files = [] as string[], surface = 'terminal' as Surface } = {},
+) {
+  const written = await startSessionIn($, on, files)
+  return { ui: await mountEditor($, surface), written }
+}
+
+type Surface = 'terminal' | 'desktop'
+
+/** Starts a session in a repo holding `files`; what the pane writes lands in the array returned. */
+async function startSessionIn($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], files: string[]) {
+  const written: Array<{ path: string; text: string }> = []
   on('command.register', () => ({ value: { command: 'loop-manager' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [{ name: 'package.json', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }))
+  on('ui.close', () => ({ value: undefined }))
+  on('fs.list', () => ({ value: files.map(file) }))
+  on('fs.write', (_, e) => {
+    written.push({ path: e.path, text: e.text })
+    return { value: undefined }
+  })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
+  return written
+}
 
+async function mountEditor($: Parameters<TestBody>[0], surface: Surface) {
+  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
+  return $.ui.mount({ ...EDITOR, surface })
+}
+
+test('a blank loop gets its first step from the palette', async ($, on) => {
+  await startSessionIn($, on, ['package.json'])
   for (const surface of ['terminal', 'desktop'] as const) {
-    await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-    const ui = await $.ui.mount({ ...EDITOR, surface })
+    const ui = await mountEditor($, surface)
 
     await ui.input({ key: 'name', text: 'build-until-green' })
     await ui.select({ key: 'start', value: 'blank' })
@@ -41,18 +75,7 @@ test('a blank loop gets its first step from the palette', async ($, on) => {
 })
 
 test('implement and tests wrapped in a repeat save as a loop that goes round until the tests pass', async ($, on) => {
-  const written: Array<{ path: string; text: string }> = []
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [{ name: 'pom.xml', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }))
-  on('fs.write', (_, e) => {
-    written.push({ path: e.path, text: e.text })
-    return { value: undefined }
-  })
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  const { ui, written } = await openEditor($, on, { files: ['pom.xml'] })
   await ui.input({ key: 'name', text: 'build-until-green' })
   await ui.select({ key: 'start', value: 'blank' })
   for (const block of ['plan', 'implement', 'tests', 'report']) {
@@ -76,18 +99,7 @@ test('implement and tests wrapped in a repeat save as a loop that goes round unt
 })
 
 test('with the cursor inside a repeat, its until and round limit can be changed before saving', async ($, on) => {
-  const written: string[] = []
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [{ name: 'package.json', kind: 'file', size: 1, mtimeMs: 0, isLink: false }] }))
-  on('fs.write', (_, e) => {
-    written.push(e.text)
-    return { value: undefined }
-  })
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'desktop' })
+  const { ui, written } = await openEditor($, on, { files: ['package.json'], surface: 'desktop' })
   await ui.input({ key: 'name', text: 'green-and-clean' })
   await ui.select({ key: 'start', value: 'repeat-until-done' })
   await ui.press({ key: 'next' }) // plan
@@ -100,24 +112,13 @@ test('with the cursor inside a repeat, its until and round limit can be changed 
   await ui.input({ key: 'rounds', text: '15' })
   await ui.press({ key: 'save' })
 
-  expect(written[0]).toContain('until: [implement, tests, lint]')
-  expect(written[0]).toContain('max_rounds: 15')
+  expect(written[0]?.text).toContain('until: [implement, tests, lint]')
+  expect(written[0]?.text).toContain('max_rounds: 15')
   await ui.unmount()
 })
 
 test('x removes the step under the cursor', async ($, on) => {
-  const written: string[] = []
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [] }))
-  on('fs.write', (_, e) => {
-    written.push(e.text)
-    return { value: undefined }
-  })
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  const { ui, written } = await openEditor($, on)
   await ui.input({ key: 'name', text: 'any-loop' })
   await ui.select({ key: 'start', value: 'blank' })
   await ui.press({ key: 'add' })
@@ -128,8 +129,8 @@ test('x removes the step under the cursor', async ($, on) => {
   await ui.press({ key: 'remove' })
   await ui.press({ key: 'save' })
 
-  expect(written[0]).toContain('id: tests')
-  expect(written[0]).not.toContain('id: report')
+  expect(written[0]?.text).toContain('id: tests')
+  expect(written[0]?.text).not.toContain('id: report')
   await ui.unmount()
 })
 
@@ -155,13 +156,7 @@ test('every other subcommand runs the loops CLI and shows what it printed', asyn
 })
 
 test('a name that is not a plain file name is refused, so the loop is never written outside .claude/loops', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [] }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  const { ui } = await openEditor($, on)
 
   await ui.input({ key: 'name', text: '../../settings' })
   await ui.select({ key: 'start', value: 'blank' })
@@ -172,13 +167,7 @@ test('a name that is not a plain file name is refused, so the loop is never writ
 })
 
 test('a name typed without pressing Enter is kept when the start is picked', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [] }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  const { ui } = await openEditor($, on)
 
   await ui.input({ key: 'name', text: 'build-until-green', kind: 'change' })
   await ui.select({ key: 'start', value: 'blank' })
@@ -188,13 +177,7 @@ test('a name typed without pressing Enter is kept when the start is picked', asy
 })
 
 test('Enter in the name field says what comes next', async ($, on) => {
-  on('command.register', () => ({ value: { command: 'loop-manager' } }))
-  on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('fs.list', () => ({ value: [] }))
-  on('session.start', (_, e) => ({ cwd: e.cwd }))
-  await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  await $.command.run({ command: 'loop-manager', args: 'new', ...TYPED })
-  const ui = await $.ui.mount({ ...EDITOR, surface: 'terminal' })
+  const { ui } = await openEditor($, on)
 
   await ui.input({ key: 'name', text: 'build-until-green' })
 
