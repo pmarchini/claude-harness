@@ -33,8 +33,8 @@ export function detectCommands(rootFiles: string[]): Commands {
 }
 
 export const TEMPLATES = {
-  'plan-build-test': 'Plan → build → test',
-  'repeat-until-done': 'Repeat until done',
+  'plan-build-test': 'Plan → build → test, each step once',
+  'repeat-until-done': 'Repeat until done: plan, then implement and test until the tests pass, then report',
 } as const;
 export type TemplateId = keyof typeof TEMPLATES;
 

@@ -102,6 +102,29 @@ export const register: Register = on => {
       )
     }
 
+    if (state.stage === 'saved') {
+      return (
+        <Box flexDirection="column">
+          <Text bold color="success">
+            ✓ {state.message}. Commit it to share the loop with your team.
+          </Text>
+          <Graph state={{ ...state, cursor: -1 }} Box={Box} Text={Text} />
+          <Text>Run it: /loop-manager run {state.loop.name} "what to build"</Text>
+          <Box flexDirection="row" gap={2}>
+            <Button key="edit" hotkey="e" onPress={() => change(s => ({ ...s, stage: 'edit', message: undefined }))}>
+              keep editing
+            </Button>
+            <Button key="new" hotkey="n" onPress={() => change(s => ({ ...newEditor(), commands: s.commands }))}>
+              new loop
+            </Button>
+            <Button key="close" hotkey="c" onPress={() => $.ui.close({ id: EDITOR_PANE })}>
+              close
+            </Button>
+          </Box>
+        </Box>
+      )
+    }
+
     const repeat = repeatAt(state.loop, state.cursor)
     const step = drawnSteps(state.loop)[state.cursor]
     const blocker = whyNotSavable(state.loop)

@@ -25,15 +25,15 @@ const file = (name: string) => ({ name, kind: 'file', size: 1, mtimeMs: 0, isLin
 
 /**
  * Runs `/loop-manager new` in a repo holding `files` and mounts the pane on
- * `surface`. `written` collects what the pane saves.
+ * `surface`. `written` collects what the pane saves, `closed` the panes it closes.
  */
 async function openEditor(
   $: Parameters<TestBody>[0],
   on: Parameters<TestBody>[1],
   { files = [] as string[], surface = 'terminal' as Surface } = {},
 ) {
-  const written = await startSessionIn($, on, files)
-  return { ui: await mountEditor($, surface), written }
+  const { written, closed } = await startSessionIn($, on, files)
+  return { ui: await mountEditor($, surface), written, closed }
 }
 
 type Surface = 'terminal' | 'desktop'
@@ -48,12 +48,16 @@ async function header(ui: Editor) {
   return (await ui.find({ type: 'Text', text: /^\S+ · (no steps yet|\d+ steps?) · / }))?.text
 }
 
-/** Starts a session in a repo holding `files`; what the pane writes lands in the array returned. */
+/** Starts a session in a repo holding `files`, recording the files the pane writes and the panes it closes. */
 async function startSessionIn($: Parameters<TestBody>[0], on: Parameters<TestBody>[1], files: string[]) {
   const written: Array<{ path: string; text: string }> = []
+  const closed: string[] = []
   on('command.register', () => ({ value: { command: 'loop-manager' } }))
   on('ui.open', () => ({ value: { isPlaced: true } }))
-  on('ui.close', () => ({ value: undefined }))
+  on('ui.close', (_, e) => {
+    closed.push(e.id)
+    return { value: undefined }
+  })
   on('fs.list', () => ({ value: files.map(file) }))
   on('fs.write', (_, e) => {
     written.push({ path: e.path, text: e.text })
@@ -61,7 +65,7 @@ async function startSessionIn($: Parameters<TestBody>[0], on: Parameters<TestBod
   })
   on('session.start', (_, e) => ({ cwd: e.cwd }))
   await $.session.start({ cwd: '/repo', surface: 'terminal', isInteractive: true })
-  return written
+  return { written, closed }
 }
 
 async function mountEditor($: Parameters<TestBody>[0], surface: Surface) {
@@ -302,5 +306,23 @@ test('adding the first check says that steps run once until a repeat makes them 
       text: 'Added tests after implement. Every step runs once for now: to go round until tests passes, press r.',
     }),
   ).toBeDefined()
+  await ui.unmount()
+})
+
+test('once saved, the pane says how to run the loop and offers to keep editing, start another or close', async ($, on) => {
+  const { ui, closed } = await openEditor($, on, { files: ['pom.xml'] })
+  await ui.input({ key: 'name', text: 'build-until-green' })
+  await ui.select({ key: 'start', value: 'repeat-until-done' })
+  await ui.press({ key: 'save' })
+
+  expect(await ui.find({ type: 'Text', text: 'Run it: /loop-manager run build-until-green "what to build"' })).toBeDefined()
+  expect(await buttons(ui)).toEqual(['edit', 'new', 'close'])
+
+  await ui.press({ key: 'edit' })
+  expect(await header(ui)).toBe('build-until-green · 4 steps · ✓ ready to save')
+
+  await ui.press({ key: 'save' })
+  await ui.press({ key: 'close' })
+  expect(closed).toEqual(['loops-editor'])
   await ui.unmount()
 })
