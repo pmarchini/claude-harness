@@ -15,6 +15,40 @@ export const BLOCKS = {
 /** Rounds a new repeat allows until the person changes it: enough to converge, never endless. */
 const DEFAULT_MAX_ROUNDS = 10;
 
+/** The commands a repo runs its checks with, as the blocks need them. */
+export type Commands = { tests: string; lint: string };
+
+/** Build files, most specific first, and the commands each one implies. */
+const BUILD_TOOLS: Array<{ files: string[]; commands: Commands }> = [
+  { files: ['pom.xml'], commands: { tests: 'mvn -q test', lint: 'mvn -q checkstyle:check' } },
+  { files: ['build.gradle', 'build.gradle.kts'], commands: { tests: './gradlew test', lint: './gradlew check' } },
+  { files: ['package.json'], commands: { tests: 'npm test', lint: 'npm run lint' } },
+];
+const FALLBACK_COMMANDS: Commands = { tests: 'make test', lint: 'make lint' };
+
+/** Picks the test and lint commands from the names of the files at the repo's root. */
+export function detectCommands(rootFiles: string[]): Commands {
+  const tool = BUILD_TOOLS.find(({ files }) => files.some((file) => rootFiles.includes(file)));
+  return tool?.commands ?? FALLBACK_COMMANDS;
+}
+
+export const TEMPLATES = {
+  'plan-build-test': 'Plan → build → test',
+  'repeat-until-done': 'Repeat until done',
+} as const;
+export type TemplateId = keyof typeof TEMPLATES;
+
+export function fromTemplate(template: TemplateId, name: string, commands: Commands): Loop {
+  const flat = [BLOCKS.plan, BLOCKS.implement, BLOCKS.tests(commands.tests), BLOCKS.report].reduce(
+    (loop, block, i) => addAfter(loop, i - 1, block).loop,
+    blankLoop(name),
+  );
+  if (template === 'plan-build-test') return flat;
+
+  // implement (1) and tests (2) go round until the tests pass.
+  return wrapInRepeat(flat, 1, 2) as Loop;
+}
+
 export function blankLoop(name: string): Loop {
   return { name, steps: [] };
 }
@@ -90,6 +124,18 @@ export function wrapInRepeat(loop: Loop, first: number, last: number): Loop | st
     steps: inside as Step[],
   };
   const steps = [...loop.steps.slice(0, start.node), { repeat }, ...loop.steps.slice(end.node + 1)];
+  return { ...loop, steps };
+}
+
+/** Changes when a repeat stops: the steps it waits on, the rounds it allows, or both. */
+export function changeRepeat(
+  loop: Loop,
+  repeatId: string,
+  changes: Partial<Pick<RepeatGroup, 'until' | 'max_rounds'>>,
+): Loop {
+  const steps = loop.steps.map((node) =>
+    'repeat' in node && node.repeat.id === repeatId ? { repeat: { ...node.repeat, ...changes } } : node,
+  );
   return { ...loop, steps };
 }
 

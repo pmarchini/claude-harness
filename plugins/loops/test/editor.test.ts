@@ -3,7 +3,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parse } from 'yaml';
-import { addAfter, blankLoop, BLOCKS, remove, toYaml, wrapInRepeat } from '../src/editor.ts';
+import {
+  addAfter,
+  blankLoop,
+  BLOCKS,
+  changeRepeat,
+  detectCommands,
+  fromTemplate,
+  remove,
+  toYaml,
+  wrapInRepeat,
+} from '../src/editor.ts';
 import { problemsIn, type Loop, type Step } from '../src/loop-rules.ts';
 
 test('steps added one after another to a blank loop save as a valid loop file', () => {
@@ -105,4 +115,28 @@ test('steps already in a repeat cannot be wrapped again: repeats do not nest', (
   const loop = wrap(loopOf(BLOCKS.implement, BLOCKS.tests('npm test'), BLOCKS.report), 0, 1);
 
   assert.equal(wrapInRepeat(loop, 1, 2), 'Pick steps outside a repeat: repeats do not nest.');
+});
+
+test('a repeat can stop on several steps and allow more rounds', () => {
+  const loop = addAfter(wrap(loopOf(BLOCKS.implement, BLOCKS.tests('npm test')), 0, 1), 1, BLOCKS.lint('npm run lint')).loop;
+
+  const edited = changeRepeat(loop, 'repeat', { until: ['tests', 'lint'], max_rounds: 15 });
+
+  assert.match(toYaml(edited), /until: \[tests, lint\]\n {6}max_rounds: 15/);
+  assert.deepEqual(problemsIn(edited), []);
+});
+
+test('the "Repeat until done" template plans, repeats implement and tests until green, then reports', () => {
+  const loop = fromTemplate('repeat-until-done', 'build-until-green', { tests: 'npm test', lint: 'npm run lint' });
+
+  assert.deepEqual(stepIdsByGroup(loop), ['plan', ['implement', 'tests'], 'report']);
+  assert.match(toYaml(loop), /until: \[tests\]/);
+  assert.deepEqual(problemsIn(loop), []);
+});
+
+test('the test and lint commands come from the build files the repo has', () => {
+  assert.deepEqual(detectCommands(['README.md', 'pom.xml']), { tests: 'mvn -q test', lint: 'mvn -q checkstyle:check' });
+  assert.deepEqual(detectCommands(['package.json']), { tests: 'npm test', lint: 'npm run lint' });
+  assert.deepEqual(detectCommands(['build.gradle.kts']), { tests: './gradlew test', lint: './gradlew check' });
+  assert.deepEqual(detectCommands(['main.go']), { tests: 'make test', lint: 'make lint' });
 });
